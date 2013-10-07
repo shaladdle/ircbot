@@ -84,6 +84,14 @@ func main() {
 		}
 		fmt.Printf("%s\n", line)
 
+		splt := strings.Split(line, "PRIVMSG " + *channel)
+		fmt.Println("split =", splt)
+
+		var msg string
+		if len(splt) != 0 {
+			msg = splt[len(splt)-1]
+		}
+
 		if line[:4] == "PING" {
 			reply := "PONG" + line[4:]
 			ircbot.CmdPrintf(reply)
@@ -91,9 +99,9 @@ func main() {
 		} else if strings.Contains(line, "MODE") && !joined {
 			joined = true
 			ircbot.CmdPrintf("JOIN %s", ircbot.channel)
-		} else if strings.Contains(line, *nick+": PING") || strings.Contains(line, *nick+", PING") {
+		} else if joined && strings.Contains(msg, *nick+": PING") {
 			ircbot.Say("POOOOOOOOOOOOOOOONG!!!!")
-		} else if strings.Contains(line, *nick+":") || strings.Contains(line, *nick+",") {
+		} else if joined && strings.Contains(msg, *nick) {
 			ircbot.Say(says[r.Intn(len(says))])
 		}
 	}
