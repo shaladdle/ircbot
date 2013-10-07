@@ -18,6 +18,8 @@ var (
 	channel  = flag.String("chan", "", "")
 )
 
+var r = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 type Bot struct {
 	nick    string
 	channel string
@@ -43,7 +45,9 @@ func (bot *Bot) Connect(hostport string) (conn net.Conn, err error) {
 }
 
 func (bot *Bot) CmdPrintf(fmtstr string, args ...interface{}) {
-	fmt.Fprintf(bot.conn, fmtstr+"\r\n", args...)
+    if _, err := fmt.Fprintf(bot.conn, fmtstr+"\r\n", args...); err != nil {
+        panic(err)
+    }
 }
 
 func (bot *Bot) Say(msg string) {
@@ -52,17 +56,6 @@ func (bot *Bot) Say(msg string) {
 
 func main() {
 	flag.Parse()
-
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	says := []string{
-		"Ohai, " + *nick + " are delicious",
-		"doge",
-		"pls",
-		"My name is " + *nick + ", pleased to meet you.",
-		"PING me if you dare",
-		"check me out and contribute to me at http://github.com/shaladdle/ircbot",
-	}
 
 	ircbot := NewBot(*nick, *channel)
 	conn, err := ircbot.Connect(*hostport)
@@ -84,13 +77,16 @@ func main() {
 		}
 		fmt.Printf("%s\n", line)
 
-		splt := strings.Split(line, "PRIVMSG " + *channel)
-		fmt.Println("split =", splt)
+        msgPrefix := "PRIVMSG " + *channel
 
 		var msg string
-		if len(splt) != 0 {
-			msg = splt[len(splt)-1]
-		}
+
+        if strings.Contains(line, msgPrefix) {
+            splt := strings.Split(line, msgPrefix)
+            if len(splt) != 0 {
+                msg = splt[len(splt)-1]
+            }
+        }
 
 		if line[:4] == "PING" {
 			reply := "PONG" + line[4:]
@@ -99,10 +95,127 @@ func main() {
 		} else if strings.Contains(line, "MODE") && !joined {
 			joined = true
 			ircbot.CmdPrintf("JOIN %s", ircbot.channel)
-		} else if joined && strings.Contains(msg, *nick+": PING") {
-			ircbot.Say("POOOOOOOOOOOOOOOONG!!!!")
-		} else if joined && strings.Contains(msg, *nick) {
-			ircbot.Say(says[r.Intn(len(says))])
-		}
+		} else if joined {
+            if idx := strings.Index(line, "!"); strings.Contains(msg, *nick+": PING") {
+                ircbot.Say("POOOOOOOOOOOOOOOONG!!!!")
+            } else if idx != -1 {
+                sender := line[1:idx]
+                var recipient string
+                if strings.Contains(msg, *nick) {
+                    recipient = *nick
+                }
+                handleMessage(Message{sender, recipient, msg}, ircbot)
+            }
+        }
 	}
+}
+
+type Message struct {
+    sender, recipient, text string
+}
+
+type handler func(Message, *Bot)
+
+func randSay(bot *Bot, things []string) {
+    thing := r.Intn(len(things))
+    bot.Say(things[thing])
+}
+
+func berate(msg Message, bot *Bot) {
+    badThings := []string{
+        msg.sender + ", I don't like you",
+        msg.sender + ", That's what your mom said!",
+    }
+
+    randSay(bot, badThings)
+}
+
+func quote(msg Message, bot *Bot) {
+    randSay(bot, []string{
+        "If you prick us do we not bleed? If you tickle us do we not laugh? If "+
+        "you poison us do we not die? And if you wrong us shall we not revenge?",
+        "Love all, trust a few, do wrong to none.",
+        "A fool thinks himself to be wise, but a wise man knows himself to be a fool.",
+        "If music be the food of love, play on.",
+        "It is not in the stars to hold our destiny but in ourselves.",
+        "When a father gives to his son, both laugh; when a son gives to his father, both cry.",
+        "Better three hours too soon than a minute too late.",
+    })
+}
+
+func benice(msg Message, bot *Bot) {
+    things := []string{
+        msg.sender + ", I love you <3",
+        msg.sender + ", you're looking classy today",
+        msg.sender + ", I completely agree",
+        msg.sender + ", amen, brother",
+    }
+    randSay(bot, things)
+}
+
+func question(msg Message, bot *Bot) {
+    things := []string{
+        msg.sender + ", how can she slap?",
+        msg.sender + ", what are you doing later?",
+        msg.sender + ", why are you still here?",
+        msg.sender + ", what's the average air speed velocity of an unlaiden swallow?",
+    }
+    randSay(bot, things)
+}
+
+func doge(msg Message, bot *Bot) {
+	randSay(bot, []string{
+		"Ohai, " + *nick + " are delicious",
+		"doge",
+		"pls",
+		"My name is " + *nick + ", pleased to meet you.",
+		"PING me if you dare",
+		"check me out and contribute to me at http://github.com/shaladdle/ircbot",
+	})
+}
+
+func waxpoetic(msg Message, bot *Bot) {
+}
+
+func ignore(msg Message, bot *Bot) {
+}
+
+func handleMessage(msg Message, bot *Bot) {
+    var handlers []handler
+    if msg.recipient != *nick {
+        handlers = []handler{
+            berate,
+            benice,
+            benice,
+            benice,
+            benice,
+            doge,
+            doge,
+            question,
+            waxpoetic,
+            quote,
+            ignore,
+            ignore,
+            ignore,
+            ignore,
+            ignore,
+            ignore,
+            ignore,
+            ignore,
+            ignore,
+            ignore,
+        }
+    } else {
+        handlers = []handler{
+            benice,
+            question,
+            doge,
+            waxpoetic,
+            quote,
+            ignore,
+        }
+    }
+    hId := r.Intn(len(handlers))
+
+    handlers[hId](msg, bot)
 }
